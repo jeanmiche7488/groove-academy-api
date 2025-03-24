@@ -1,0 +1,120 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  ADMIN
+  TEACHER
+  STUDENT
+}
+
+enum CourseType {
+  INSTRUMENT
+  WORKSHOP
+}
+
+model User {
+  id            String    @id @default(uuid())
+  email         String    @unique
+  password      String
+  firstName     String
+  lastName      String
+  role          UserRole
+  phone         String?
+  address       String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  // Relations
+  teacherCourses Course[]  @relation("TeacherCourses")
+  studentCourses Course[]  @relation("StudentCourses")
+  messages      Message[]
+  reservations  Reservation[]
+  availabilities TeacherAvailability[]
+}
+
+model Course {
+  id          String     @id @default(uuid())
+  name        String
+  description String?
+  type        CourseType
+  duration    Int        // en minutes
+  price       Float
+  maxStudents Int?       // Pour les ateliers
+  teacherId   String
+  teacher     User       @relation("TeacherCourses", fields: [teacherId], references: [id])
+  students    User[]     @relation("StudentCourses")
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+
+  // Relations
+  reservations Reservation[]
+  schedules    CourseSchedule[]
+}
+
+model CourseSchedule {
+  id        String   @id @default(uuid())
+  courseId  String
+  course    Course   @relation(fields: [courseId], references: [id])
+  dayOfWeek Int      // 0-6 (Dimanche-Samedi)
+  startTime String   // Format HH:mm
+  endTime   String   // Format HH:mm
+  room      String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model TeacherAvailability {
+  id        String   @id @default(uuid())
+  teacherId String
+  teacher   User     @relation(fields: [teacherId], references: [id])
+  dayOfWeek Int      // 0-6 (Dimanche-Samedi)
+  startTime String   // Format HH:mm
+  endTime   String   // Format HH:mm
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Reservation {
+  id        String   @id @default(uuid())
+  date      DateTime
+  status    String   // PENDING, CONFIRMED, CANCELLED
+  courseId  String
+  course    Course   @relation(fields: [courseId], references: [id])
+  studentId String
+  student   User     @relation(fields: [studentId], references: [id])
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Message {
+  id        String   @id @default(uuid())
+  content   String
+  senderId  String
+  sender    User     @relation(fields: [senderId], references: [id])
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Payment {
+  id            String   @id @default(uuid())
+  amount        Float
+  status        String   // PENDING, COMPLETED, FAILED
+  studentId     String
+  student       User     @relation(fields: [studentId], references: [id])
+  courseId      String
+  course        Course   @relation(fields: [courseId], references: [id])
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+}
