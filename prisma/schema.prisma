@@ -11,6 +11,7 @@ generator client {
 datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
 }
 
 enum UserRole {
@@ -24,6 +25,83 @@ enum CourseType {
   WORKSHOP
 }
 
+enum InstrumentType {
+  GUITAR
+  BASS
+  PIANO
+  VOCAL
+  DRUMS
+}
+
+enum WorkshopType {
+  JAM_SESSION
+  COMPOSITION
+  CONCERT_PREP
+  IMPROVISATION
+}
+
+enum CourseCategory {
+  INDIVIDUAL
+  DUO_TRIO
+}
+
+enum StudentLevel {
+  BEGINNER
+  INTERMEDIATE
+  ADVANCED
+  EXPERT
+}
+
+enum OrderStatus {
+  PENDING
+  CONFIRMED
+  CANCELLED
+  COMPLETED
+  REJECTED
+}
+
+enum OfferStatus {
+  PENDING
+  ACCEPTED
+  REJECTED
+  EXPIRED
+}
+
+enum OfferType {
+  TRIAL
+  SUBSCRIPTION
+}
+
+enum ContentType {
+  DOCUMENT
+  VIDEO
+  LINK
+}
+
+enum SubscriptionStatus {
+  ACTIVE
+  CANCELLED
+  EXPIRED
+}
+
+enum MembershipType {
+  MANDATORY
+  OPTIONAL
+}
+
+enum PaymentStatus {
+  PENDING
+  PAID
+  CANCELLED
+}
+
+enum NotificationType {
+  COURSE_UPDATE
+  PAYMENT_REMINDER
+  MEMBERSHIP_EXPIRING
+  MESSAGE
+}
+
 model User {
   id            String    @id @default(uuid())
   email         String    @unique
@@ -33,15 +111,25 @@ model User {
   role          UserRole
   phone         String?
   address       String?
+  specialty     String?   // Pour les professeurs
+  bio           String?   // Pour les professeurs
+  level         StudentLevel? // Pour les étudiants uniquement
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
 
   // Relations
-  teacherCourses Course[]  @relation("TeacherCourses")
-  studentCourses Course[]  @relation("StudentCourses")
-  messages      Message[]
-  reservations  Reservation[]
-  availabilities TeacherAvailability[]
+  teacherCourses    Course[]            @relation("TeacherCourses")
+  studentCourses    Course[]            @relation("StudentCourses")
+  messages          Message[]
+  reservations      Reservation[]
+  availabilities    TeacherAvailability[]
+  studentPayments   Payment[]           @relation("StudentPayments")
+  orders            Order[]             @relation("StudentOrders")
+  receivedOffers    Offer[]             @relation("StudentOffers")
+  contents          Content[]
+  subscriptions     Subscription[]
+  memberships       Membership[]
+  notifications     Notification[]
 }
 
 model Course {
@@ -49,8 +137,12 @@ model Course {
   name        String
   description String?
   type        CourseType
+  category    CourseCategory
+  instrumentType InstrumentType?  // Pour les cours d'instruments
+  workshopType   WorkshopType?    // Pour les ateliers
   duration    Int        // en minutes
-  price       Float
+  priceId     String     // Lien vers la table des prix
+  price       Price      @relation(fields: [priceId], references: [id])
   maxStudents Int?       // Pour les ateliers
   teacherId   String
   teacher     User       @relation("TeacherCourses", fields: [teacherId], references: [id])
@@ -59,8 +151,42 @@ model Course {
   updatedAt   DateTime   @updatedAt
 
   // Relations
-  reservations Reservation[]
-  schedules    CourseSchedule[]
+  reservations    Reservation[]
+  schedules       CourseSchedule[]
+  coursePayments  Payment[]           @relation("CoursePayments")
+  orders          Order[]             @relation("CourseOrders")
+  availableSlots  AvailableSlot[]     // Nouveau: créneaux disponibles
+  offers          Offer[]             // Nouveau: offres liées au cours
+  contents        Content[]
+  subscriptions   Subscription[]
+}
+
+// Nouvelle table pour les créneaux disponibles
+model AvailableSlot {
+  id          String   @id @default(uuid())
+  courseId    String
+  course      Course   @relation(fields: [courseId], references: [id])
+  startTime   DateTime
+  endTime     DateTime
+  isBooked    Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relations
+  offers      Offer[]
+  orders      Order[]
+}
+
+// Table pour les prix
+model Price {
+  id          String   @id @default(uuid())
+  amount      Float
+  currency    String   @default("EUR")
+  description String?
+  type        String   // "INDIVIDUAL", "DUO_TRIO", "WORKSHOP", "TRIAL"
+  courses     Course[]
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 }
 
 model CourseSchedule {
@@ -99,12 +225,15 @@ model Reservation {
 }
 
 model Message {
-  id        String   @id @default(uuid())
-  content   String
-  senderId  String
-  sender    User     @relation(fields: [senderId], references: [id])
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id          String   @id @default(uuid())
+  content     String
+  senderId    String
+  sender      User     @relation(fields: [senderId], references: [id])
+  receiverId  String
+  receiver    User     @relation("ReceivedMessages", fields: [receiverId], references: [id])
+  isRead      Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 }
 
 model Payment {
@@ -112,9 +241,64 @@ model Payment {
   amount        Float
   status        String   // PENDING, COMPLETED, FAILED
   studentId     String
-  student       User     @relation(fields: [studentId], references: [id])
+  student       User     @relation("StudentPayments", fields: [studentId], references: [id])
   courseId      String
-  course        Course   @relation(fields: [courseId], references: [id])
+  course        Course   @relation("CoursePayments", fields: [courseId], references: [id])
+  orderId       String
+  order         Order    @relation(fields: [orderId], references: [id])
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
+}
+
+model Content {
+  id          String      @id @default(uuid())
+  title       String
+  description String?
+  type        ContentType
+  url         String
+  courseId    String
+  course      Course      @relation(fields: [courseId], references: [id])
+  teacherId   String
+  teacher     User        @relation(fields: [teacherId], references: [id])
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+}
+
+model Subscription {
+  id              String            @id @default(uuid())
+  studentId       String
+  student         User              @relation(fields: [studentId], references: [id])
+  courseId        String
+  course          Course            @relation(fields: [courseId], references: [id])
+  status          SubscriptionStatus @default(ACTIVE)
+  paymentStatus   PaymentStatus     @default(PENDING)
+  startDate       DateTime
+  endDate         DateTime
+  monthlyPrice    Float
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+}
+
+model Membership {
+  id          String         @id @default(uuid())
+  studentId   String
+  student     User           @relation(fields: [studentId], references: [id])
+  type        MembershipType
+  amount      Float
+  year        Int
+  paymentStatus PaymentStatus @default(PENDING)
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+}
+
+model Notification {
+  id          String           @id @default(uuid())
+  userId      String
+  user        User             @relation(fields: [userId], references: [id])
+  type        NotificationType
+  title       String
+  content     String
+  isRead      Boolean          @default(false)
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
 }

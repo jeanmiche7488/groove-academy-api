@@ -1,35 +1,41 @@
-# Dependencies
-node_modules/
-npm-debug.log
-yarn-debug.log
-yarn-error.log
+# dependencies
+/node_modules
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
 
-# Environment variables
+# environment variables
 .env
 .env.local
 .env.*.local
 
-# Build output
-dist/
-build/
+# build
+/dist
+/build
 
-# IDE and editor files
+# IDE
 .idea/
 .vscode/
 *.swp
 *.swo
+
+# OS
 .DS_Store
+Thumbs.db
+
+# logs
+logs
+*.log
+
+# testing
+/coverage
+
+# TypeScript
+*.tsbuildinfo
 
 # Prisma
 prisma/*.db
 prisma/migrations/
-
-# Logs
-logs/
-*.log
-
-# Testing
-coverage/
 
 # Temporary files
 tmp/
