@@ -4,14 +4,18 @@ import { authenticateToken } from "../middleware/auth"
 
 const router = Router()
 
-// Toutes les routes nécessitent une authentification
+// Routes protégées par authentification
 router.use(authenticateToken)
 
-// Routes pour les cours
-router.get("/", courseController.getCourses)
-router.get("/:id", courseController.getCourse)
-router.post("/", courseController.createCourse)
-router.put("/:id", courseController.updateCourse)
-router.delete("/:id", courseController.deleteCourse)
+// Routes CRUD pour les cours
+router.post("/", courseController.create)
+router.get("/", courseController.getAll)
+router.get("/:id", courseController.getById)
+router.put("/:id", courseController.update)
+router.delete("/:id", courseController.delete)
+
+// Routes pour la gestion des étudiants dans un cours
+router.post("/:courseId/students/:studentId", courseController.addStudent)
+router.delete("/:courseId/students/:studentId", courseController.removeStudent)
 
 export default router 

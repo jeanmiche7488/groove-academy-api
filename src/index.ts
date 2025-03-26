@@ -1,27 +1,17 @@
 import express from 'express';
 import cors from 'cors';
-import dotenv from 'dotenv';
-import courseRoutes from './routes/courseRoutes';
-import teacherRoutes from './routes/teacherRoutes';
+import { PrismaClient } from '@prisma/client';
 import authRoutes from './routes/auth.routes';
-
-// Charger les variables d'environnement
-dotenv.config();
+import courseRoutes from './routes/course.routes';
 
 const app = express();
-const port = process.env.PORT || 3001;
+const prisma = new PrismaClient();
 
-// Configuration CORS
-app.use(cors({
-  origin: 'http://localhost:3000',
-  credentials: true,
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization']
-}));
-
+// Middleware
+app.use(cors());
 app.use(express.json());
 
-// Middleware de logging
+// Middleware de logging pour le débogage
 app.use((req, res, next) => {
   console.log(`${req.method} ${req.url}`);
   console.log('Body:', req.body);
@@ -31,14 +21,20 @@ app.use((req, res, next) => {
 // Routes
 app.use('/api/auth', authRoutes);
 app.use('/api/courses', courseRoutes);
-app.use('/api/teachers', teacherRoutes);
 
-// Route de test
+// Route de base
 app.get('/', (req, res) => {
   res.json({ message: 'Bienvenue sur l\'API de Groove Academy' });
 });
 
-// Démarrage du serveur
-app.listen(port, () => {
-  console.log(`Serveur démarré sur le port ${port}`);
+// Gestion des erreurs
+app.use((err: Error, req: express.Request, res: express.Response, next: express.NextFunction) => {
+  console.error(err.stack);
+  res.status(500).json({ error: 'Une erreur est survenue sur le serveur' });
+});
+
+const PORT = process.env.PORT || 3001;
+
+app.listen(PORT, () => {
+  console.log(`Serveur démarré sur le port ${PORT}`);
 }); 
