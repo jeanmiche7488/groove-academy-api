@@ -21,7 +21,7 @@ enum UserRole {
 }
 
 enum CourseType {
-  INSTRUMENT
+  COURSE
   WORKSHOP
 }
 
@@ -103,65 +103,147 @@ enum NotificationType {
 }
 
 model User {
-  id            String    @id @default(uuid())
-  email         String    @unique
-  password      String
-  firstName     String
-  lastName      String
-  role          UserRole
-  phone         String?
-  address       String?
-  specialty     String?   // Pour les professeurs
-  bio           String?   // Pour les professeurs
-  level         StudentLevel? // Pour les étudiants uniquement
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
+  id        String   @id @default(uuid())
+  email     String   @unique
+  password  String
+  firstName String
+  lastName  String
+  role      UserRole
+  phone     String?
+  specialty String?  // Spécialité instrumentale
+  hourlyRate Float?  // Tarif horaire
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-  // Relations
-  teacherCourses    Course[]            @relation("TeacherCourses")
-  studentCourses    Course[]            @relation("StudentCourses")
-  messages          Message[]
-  reservations      Reservation[]
-  availabilities    TeacherAvailability[]
-  studentPayments   Payment[]           @relation("StudentPayments")
-  orders            Order[]             @relation("StudentOrders")
-  receivedOffers    Offer[]             @relation("StudentOffers")
-  contents          Content[]
-  subscriptions     Subscription[]
-  memberships       Membership[]
-  notifications     Notification[]
+  // Relations selon le rôle
+  teacherProfile Teacher?
+  studentProfile Student?
+
+  // Relations pour les commandes
+  orders         Order[]    @relation("StudentOrders")
+  offers         Offer[]    @relation("StudentOffers")
+  reservations   Reservation[]
+  availabilities TeacherAvailability[]
+  payments       Payment[]  @relation("StudentPayments")
+  contents       Content[]
+  subscriptions  Subscription[]
+  memberships    Membership[]
+  notifications  Notification[]
+  sentMessages   Message[]  @relation("SentMessages")
+  receivedMessages Message[] @relation("ReceivedMessages")
+}
+
+model Teacher {
+  id        String   @id @default(uuid())
+  userId    String   @unique
+  user      User     @relation(fields: [userId], references: [id])
+  courses   Course[]
+  instruments TeacherInstrument[]  // Instruments que le professeur peut enseigner
+  workshops  TeacherWorkshop[]     // Ateliers que le professeur peut animer
+  totalEarnings Float @default(0)  // Total des gains du mois
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Student {
+  id        String   @id @default(uuid())
+  userId    String   @unique
+  user      User     @relation(fields: [userId], references: [id])
+  enrollments Enrollment[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
 
 model Course {
-  id          String     @id @default(uuid())
+  id          String   @id @default(uuid())
   name        String
-  description String?
+  description String
   type        CourseType
-  category    CourseCategory
-  instrumentType InstrumentType?  // Pour les cours d'instruments
-  workshopType   WorkshopType?    // Pour les ateliers
-  duration    Int        // en minutes
-  priceId     String     // Lien vers la table des prix
-  price       Price      @relation(fields: [priceId], references: [id])
-  maxStudents Int?       // Pour les ateliers
+  maxStudents Int
+  pricePerStudent Float
   teacherId   String
-  teacher     User       @relation("TeacherCourses", fields: [teacherId], references: [id])
-  students    User[]     @relation("StudentCourses")
-  createdAt   DateTime   @default(now())
-  updatedAt   DateTime   @updatedAt
+  teacher     Teacher  @relation(fields: [teacherId], references: [id])
+  enrollments Enrollment[]
+  schedules   CourseSchedule[]
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 
-  // Relations
-  reservations    Reservation[]
-  schedules       CourseSchedule[]
-  coursePayments  Payment[]           @relation("CoursePayments")
-  orders          Order[]             @relation("CourseOrders")
-  availableSlots  AvailableSlot[]     // Nouveau: créneaux disponibles
-  offers          Offer[]             // Nouveau: offres liées au cours
-  contents        Content[]
-  subscriptions   Subscription[]
+  // Relations pour les commandes et paiements
+  orders      Order[]    @relation("CourseOrders")
+  offers      Offer[]
+  availableSlots AvailableSlot[]
+  price       Price?     @relation(fields: [priceId], references: [id])
+  priceId     String?
+  payments    Payment[]  @relation("CoursePayments")
+  contents    Content[]
+  subscriptions Subscription[]
+  reservations Reservation[]
 }
 
-// Nouvelle table pour les créneaux disponibles
+model Enrollment {
+  id        String   @id @default(uuid())
+  studentId String
+  student   Student  @relation(fields: [studentId], references: [id])
+  courseId  String
+  course    Course   @relation(fields: [courseId], references: [id])
+  status    PaymentStatus
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model CourseSchedule {
+  id        String   @id @default(uuid())
+  courseId  String
+  course    Course   @relation(fields: [courseId], references: [id])
+  weekId    String
+  week      Week     @relation(fields: [weekId], references: [id])
+  dayOfWeek Int      // 1-7 pour Lundi-Dimanche
+  startTime String   // Format HH:mm
+  endTime   String   // Format HH:mm
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Week {
+  id        String   @id @default(uuid())
+  startDate DateTime
+  endDate   DateTime
+  isActive  Boolean  @default(true)
+  schedules CourseSchedule[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Order {
+  id          String   @id @default(uuid())
+  studentId   String
+  student     User     @relation("StudentOrders", fields: [studentId], references: [id])
+  courseId    String
+  course      Course   @relation("CourseOrders", fields: [courseId], references: [id])
+  slotId      String
+  slot        AvailableSlot @relation(fields: [slotId], references: [id])
+  status      OrderStatus
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relations
+  payment     Payment?
+}
+
+model Offer {
+  id          String   @id @default(uuid())
+  type        OfferType
+  studentId   String
+  student     User     @relation("StudentOffers", fields: [studentId], references: [id])
+  courseId    String
+  course      Course   @relation(fields: [courseId], references: [id])
+  slotId      String
+  slot        AvailableSlot @relation(fields: [slotId], references: [id])
+  status      OfferStatus
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
 model AvailableSlot {
   id          String   @id @default(uuid())
   courseId    String
@@ -177,7 +259,6 @@ model AvailableSlot {
   orders      Order[]
 }
 
-// Table pour les prix
 model Price {
   id          String   @id @default(uuid())
   amount      Float
@@ -189,16 +270,24 @@ model Price {
   updatedAt   DateTime @updatedAt
 }
 
-model CourseSchedule {
-  id        String   @id @default(uuid())
-  courseId  String
-  course    Course   @relation(fields: [courseId], references: [id])
-  dayOfWeek Int      // 0-6 (Dimanche-Samedi)
-  startTime String   // Format HH:mm
-  endTime   String   // Format HH:mm
-  room      String?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+model TeacherInstrument {
+  id          String   @id @default(uuid())
+  teacherId   String
+  teacher     Teacher  @relation(fields: [teacherId], references: [id])
+  instrument  InstrumentType
+  level       String   // Niveau d'expertise (débutant, intermédiaire, avancé)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model TeacherWorkshop {
+  id          String   @id @default(uuid())
+  teacherId   String
+  teacher     Teacher  @relation(fields: [teacherId], references: [id])
+  workshopType WorkshopType
+  description String?  // Description de l'atelier
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 }
 
 model TeacherAvailability {
@@ -208,6 +297,9 @@ model TeacherAvailability {
   dayOfWeek Int      // 0-6 (Dimanche-Samedi)
   startTime String   // Format HH:mm
   endTime   String   // Format HH:mm
+  isRecurring Boolean @default(true)  // Si la disponibilité est récurrente
+  startDate DateTime? // Date de début si non récurrent
+  endDate   DateTime? // Date de fin si non récurrent
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }
@@ -226,28 +318,30 @@ model Reservation {
 
 model Message {
   id          String   @id @default(uuid())
-  content     String
   senderId    String
-  sender      User     @relation(fields: [senderId], references: [id])
+  sender      User     @relation("SentMessages", fields: [senderId], references: [id])
   receiverId  String
   receiver    User     @relation("ReceivedMessages", fields: [receiverId], references: [id])
+  content     String
   isRead      Boolean  @default(false)
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 }
 
 model Payment {
-  id            String   @id @default(uuid())
-  amount        Float
-  status        String   // PENDING, COMPLETED, FAILED
-  studentId     String
-  student       User     @relation("StudentPayments", fields: [studentId], references: [id])
-  courseId      String
-  course        Course   @relation("CoursePayments", fields: [courseId], references: [id])
-  orderId       String
-  order         Order    @relation(fields: [orderId], references: [id])
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  id          String   @id @default(uuid())
+  studentId   String
+  student     User     @relation("StudentPayments", fields: [studentId], references: [id])
+  courseId    String
+  course      Course   @relation("CoursePayments", fields: [courseId], references: [id])
+  amount      Float
+  status      PaymentStatus
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relations
+  orderId     String   @unique
+  order       Order    @relation(fields: [orderId], references: [id])
 }
 
 model Content {
